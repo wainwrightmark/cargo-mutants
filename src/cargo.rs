@@ -18,6 +18,7 @@ use crate::console::Console;
 use crate::log_file::LogFile;
 use crate::path::TreeRelativePathBuf;
 use crate::process::{get_command_output, Process, ProcessStatus};
+use crate::source::SourceTreeRoot;
 use crate::*;
 
 /// How frequently to check if cargo finished.
@@ -98,7 +99,6 @@ pub fn cargo_argv(package_name: Option<&str>, phase: Phase, options: &Options) -
 #[derive(Debug)]
 pub struct CargoSourceTree {
     pub root: Utf8PathBuf,
-    cargo_toml_path: Utf8PathBuf,
 }
 
 impl CargoSourceTree {
@@ -113,11 +113,20 @@ impl CargoSourceTree {
             .to_owned();
         assert!(root.is_dir());
 
-        Ok(CargoSourceTree {
-            root,
-            cargo_toml_path,
-        })
+        Ok(CargoSourceTree { root })
     }
+}
+/// Open the source tree enclosing the given path.
+///
+/// Returns an error if it's not found.
+pub fn open_tree(path: &Utf8Path) -> Result<SourceTreeRoot> {
+    let cargo_toml_path = locate_cargo_toml(path)?;
+    let root = cargo_toml_path
+        .parent()
+        .expect("cargo_toml_path has a parent")
+        .to_owned();
+    assert!(root.is_dir());
+    Ok(SourceTreeRoot(root))
 }
 
 /// Return adjusted CARGO_ENCODED_RUSTFLAGS, including any changes to cap-lints.
@@ -177,31 +186,32 @@ impl SourceTree for CargoSourceTree {
     fn path(&self) -> &Utf8Path {
         &self.root
     }
+}
 
-    fn root_files(&self, _options: &Options) -> Result<Vec<Arc<SourceFile>>> {
-        debug!("cargo_toml_path = {}", self.cargo_toml_path);
-        check_interrupted()?;
-        let metadata = cargo_metadata::MetadataCommand::new()
-            .manifest_path(&self.cargo_toml_path)
-            .exec()
-            .context("run cargo metadata")?;
-        check_interrupted()?;
+pub fn cargo_root_files(source_root_path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>> {
+    let cargo_toml_path = source_root_path.join("Cargo.toml");
+    debug!("cargo_toml_path = {}", cargo_toml_path);
+    check_interrupted()?;
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .manifest_path(&cargo_toml_path)
+        .exec()
+        .context("run cargo metadata")?;
+    check_interrupted()?;
 
-        let mut r = Vec::new();
-        for package_metadata in &metadata.workspace_packages() {
-            debug!("walk package {:?}", package_metadata.manifest_path);
-            let package_name = Arc::new(package_metadata.name.to_string());
-            for source_path in direct_package_sources(&self.root, package_metadata)? {
-                check_interrupted()?;
-                r.push(Arc::new(SourceFile::new(
-                    &self.root,
-                    source_path,
-                    package_name.clone(),
-                )?));
-            }
+    let mut r = Vec::new();
+    for package_metadata in &metadata.workspace_packages() {
+        debug!("walk package {:?}", package_metadata.manifest_path);
+        let package_name = Arc::new(package_metadata.name.to_string());
+        for source_path in direct_package_sources(source_root_path, package_metadata)? {
+            check_interrupted()?;
+            r.push(Arc::new(SourceFile::new(
+                source_root_path,
+                source_path,
+                package_name.clone(),
+            )?));
         }
-        Ok(r)
     }
+    Ok(r)
 }
 
 /// Find all the files that are named in the `path` of targets in a Cargo manifest that should be tested.

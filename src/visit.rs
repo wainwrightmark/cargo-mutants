@@ -40,7 +40,8 @@ fn walk_tree(
     let mut seen_files: Vec<Arc<SourceFile>> = Vec::new();
     let tree_path = source_tree.path();
 
-    let mut file_queue: VecDeque<Arc<SourceFile>> = source_tree.root_files(options)?.into();
+    let mut file_queue: VecDeque<Arc<SourceFile>> =
+        cargo::cargo_root_files(source_tree.path())?.into();
     while let Some(source_file) = file_queue.pop_front() {
         check_interrupted()?;
         let package_name = source_file.package_name.clone();

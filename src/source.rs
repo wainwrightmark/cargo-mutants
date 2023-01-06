@@ -69,14 +69,12 @@ impl SourceFile {
 /// It knows its filesystem path, and can provide a list of source files, from
 /// which mutations can be generated.
 pub trait SourceTree: std::fmt::Debug {
-    /// Return a list of crate root files for the tree.
-    ///
-    /// These are the `lib.rs`, `main.rs`, etc. From these, all the other source files can be found by walking `mod` statements.
-    fn root_files(&self, options: &Options) -> Result<Vec<Arc<SourceFile>>>;
-
     /// Path of the root of the tree.
     fn path(&self) -> &Utf8Path;
 }
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SourceTreeRoot(pub Utf8PathBuf);
 
 #[cfg(test)]
 mod test {
