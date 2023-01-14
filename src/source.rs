@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2023 Martin Pool
 
 //! Access to a Rust source tree and files.
 
@@ -10,7 +10,6 @@ use camino::Utf8Path;
 use tracing::{debug, info, warn};
 
 use crate::path::TreeRelativePathBuf;
-use crate::*;
 
 /// A Rust source file within a source tree.
 ///
@@ -61,20 +60,6 @@ impl SourceFile {
         &self.tree_relative_path
     }
 }
-
-/// Some kind of source tree.
-///
-/// The specific type of tree depends on which tool is used to build it.
-///
-/// It knows its filesystem path, and can provide a list of source files, from
-/// which mutations can be generated.
-pub trait SourceTree: std::fmt::Debug {
-    /// Path of the root of the tree.
-    fn path(&self) -> &Utf8Path;
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SourceTreeRoot(pub Utf8PathBuf);
 
 #[cfg(test)]
 mod test {

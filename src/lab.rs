@@ -12,7 +12,7 @@ use rand::prelude::*;
 #[allow(unused)]
 use tracing::{debug, debug_span, error, info, trace};
 
-use crate::cargo::{cargo_argv, run_cargo, rustflags, CargoSourceTree};
+use crate::cargo::{cargo_argv, run_cargo, rustflags};
 use crate::console::Console;
 use crate::outcome::{LabOutcome, Phase, ScenarioOutcome};
 use crate::output::OutputDir;
@@ -24,7 +24,7 @@ use crate::*;
 /// Before testing the mutants, the lab checks that the source tree passes its tests with no
 /// mutations applied.
 pub fn test_unmutated_then_all_mutants(
-    source_tree: &CargoSourceTree,
+    source_tree: &Utf8Path,
     options: Options,
     console: &Console,
 ) -> Result<LabOutcome> {
@@ -32,7 +32,7 @@ pub fn test_unmutated_then_all_mutants(
     let output_in_dir = if let Some(o) = &options.output_in_dir {
         o.as_path()
     } else {
-        source_tree.path()
+        source_tree.clone()
     };
     let output_dir = OutputDir::new(output_in_dir)?;
     console.set_debug_log(output_dir.open_debug_log()?);

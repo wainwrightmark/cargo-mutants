@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2023 Martin Pool
 
 //! A `mutants.out` directory holding logs and other output.
 
@@ -239,7 +239,6 @@ mod test {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::source::SourceTree;
 
     fn minimal_source_tree() -> TempDir {
         let tmp = tempfile::tempdir().unwrap();
@@ -278,8 +277,8 @@ version = "0.0.0"
     fn create_output_dir() {
         let tmp = minimal_source_tree();
         let tmp_path = tmp.path().try_into().unwrap();
-        let src_tree = CargoSourceTree::open(tmp_path).unwrap();
-        let output_dir = OutputDir::new(src_tree.path()).unwrap();
+        let root = CargoTool {}.find_root(tmp_path).unwrap();
+        let output_dir = OutputDir::new(&root).unwrap();
         assert_eq!(
             list_recursive(tmp.path()),
             &[
@@ -296,8 +295,8 @@ version = "0.0.0"
                 "src/lib.rs",
             ]
         );
-        assert_eq!(output_dir.path(), src_tree.path().join("mutants.out"));
-        assert_eq!(output_dir.log_dir, src_tree.path().join("mutants.out/log"));
+        assert_eq!(output_dir.path(), root.join("mutants.out"));
+        assert_eq!(output_dir.log_dir, root.join("mutants.out/log"));
         assert!(output_dir.path().join("lock.json").is_file());
     }
 

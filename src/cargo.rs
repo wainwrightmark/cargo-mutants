@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2023 Martin Pool
 
 //! Run Cargo as a subprocess, including timeouts and propagating signals.
 
@@ -18,11 +18,26 @@ use crate::console::Console;
 use crate::log_file::LogFile;
 use crate::path::TreeRelativePathBuf;
 use crate::process::{get_command_output, Process, ProcessStatus};
-use crate::source::SourceTreeRoot;
+use crate::tool::Tool;
 use crate::*;
 
 /// How frequently to check if cargo finished.
 const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+#[derive(Debug)]
+pub struct CargoTool {}
+
+impl Tool for CargoTool {
+    fn find_root(&self, path: &Utf8Path) -> Result<Utf8PathBuf> {
+        let cargo_toml_path = locate_cargo_toml(path)?;
+        let root = cargo_toml_path
+            .parent()
+            .expect("cargo_toml_path has a parent")
+            .to_owned();
+        assert!(root.is_dir());
+        Ok(root)
+    }
+}
 
 /// Run one `cargo` subprocess, with a timeout, and with appropriate handling of interrupts.
 pub fn run_cargo(
@@ -95,40 +110,6 @@ pub fn cargo_argv(package_name: Option<&str>, phase: Phase, options: &Options) -
     cargo_args
 }
 
-/// A source tree where we can run cargo commands.
-#[derive(Debug)]
-pub struct CargoSourceTree {
-    pub root: Utf8PathBuf,
-}
-
-impl CargoSourceTree {
-    /// Open the source tree enclosing the given path.
-    ///
-    /// Returns an error if it's not found.
-    pub fn open(path: &Utf8Path) -> Result<CargoSourceTree> {
-        let cargo_toml_path = locate_cargo_toml(path)?;
-        let root = cargo_toml_path
-            .parent()
-            .expect("cargo_toml_path has a parent")
-            .to_owned();
-        assert!(root.is_dir());
-
-        Ok(CargoSourceTree { root })
-    }
-}
-/// Open the source tree enclosing the given path.
-///
-/// Returns an error if it's not found.
-pub fn open_tree(path: &Utf8Path) -> Result<SourceTreeRoot> {
-    let cargo_toml_path = locate_cargo_toml(path)?;
-    let root = cargo_toml_path
-        .parent()
-        .expect("cargo_toml_path has a parent")
-        .to_owned();
-    assert!(root.is_dir());
-    Ok(SourceTreeRoot(root))
-}
-
 /// Return adjusted CARGO_ENCODED_RUSTFLAGS, including any changes to cap-lints.
 ///
 /// This does not currently read config files; it's too complicated.
@@ -180,12 +161,6 @@ fn locate_cargo_toml(path: &Utf8Path) -> Result<Utf8PathBuf> {
         .into();
     assert!(cargo_toml_path.is_file());
     Ok(cargo_toml_path)
-}
-
-impl SourceTree for CargoSourceTree {
-    fn path(&self) -> &Utf8Path {
-        &self.root
-    }
 }
 
 pub fn cargo_root_files(source_root_path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>> {
@@ -330,17 +305,17 @@ mod test {
 
     #[test]
     fn error_opening_outside_of_crate() {
-        CargoSourceTree::open(Utf8Path::new("/")).unwrap_err();
+        CargoTool {}.find_root(Utf8Path::new("/")).unwrap_err();
     }
 
     #[test]
     fn open_subdirectory_of_crate_opens_the_crate() {
-        let source_tree = CargoSourceTree::open(Utf8Path::new("testdata/tree/factorial/src"))
+        let root = CargoTool {}
+            .find_root(Utf8Path::new("testdata/tree/factorial/src"))
             .expect("open source tree from subdirectory");
-        let path = source_tree.path();
-        assert!(path.is_dir());
-        assert!(path.join("Cargo.toml").is_file());
-        assert!(path.join("src/bin/factorial.rs").is_file());
-        assert_eq!(path.file_name().unwrap(), OsStr::new("factorial"));
+        assert!(root.is_dir());
+        assert!(root.join("Cargo.toml").is_file());
+        assert!(root.join("src/bin/factorial.rs").is_file());
+        assert_eq!(root.file_name().unwrap(), OsStr::new("factorial"));
     }
 }
