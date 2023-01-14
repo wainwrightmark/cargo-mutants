@@ -43,6 +43,32 @@ impl Tool for CargoTool {
         assert!(root.is_dir());
         Ok(root)
     }
+
+    fn root_files(&self, source_root_path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>> {
+        let cargo_toml_path = source_root_path.join("Cargo.toml");
+        debug!("cargo_toml_path = {}", cargo_toml_path);
+        check_interrupted()?;
+        let metadata = cargo_metadata::MetadataCommand::new()
+            .manifest_path(&cargo_toml_path)
+            .exec()
+            .context("run cargo metadata")?;
+        check_interrupted()?;
+
+        let mut r = Vec::new();
+        for package_metadata in &metadata.workspace_packages() {
+            debug!("walk package {:?}", package_metadata.manifest_path);
+            let package_name = Arc::new(package_metadata.name.to_string());
+            for source_path in direct_package_sources(source_root_path, package_metadata)? {
+                check_interrupted()?;
+                r.push(Arc::new(SourceFile::new(
+                    source_root_path,
+                    source_path,
+                    package_name.clone(),
+                )?));
+            }
+        }
+        Ok(r)
+    }
 }
 
 /// Run one `cargo` subprocess, with a timeout, and with appropriate handling of interrupts.
@@ -167,32 +193,6 @@ fn locate_cargo_toml(path: &Utf8Path) -> Result<Utf8PathBuf> {
         .into();
     assert!(cargo_toml_path.is_file());
     Ok(cargo_toml_path)
-}
-
-pub fn cargo_root_files(source_root_path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>> {
-    let cargo_toml_path = source_root_path.join("Cargo.toml");
-    debug!("cargo_toml_path = {}", cargo_toml_path);
-    check_interrupted()?;
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(&cargo_toml_path)
-        .exec()
-        .context("run cargo metadata")?;
-    check_interrupted()?;
-
-    let mut r = Vec::new();
-    for package_metadata in &metadata.workspace_packages() {
-        debug!("walk package {:?}", package_metadata.manifest_path);
-        let package_name = Arc::new(package_metadata.name.to_string());
-        for source_path in direct_package_sources(source_root_path, package_metadata)? {
-            check_interrupted()?;
-            r.push(Arc::new(SourceFile::new(
-                source_root_path,
-                source_path,
-                package_name.clone(),
-            )?));
-        }
-    }
-    Ok(r)
 }
 
 /// Find all the files that are named in the `path` of targets in a Cargo manifest that should be tested.

@@ -24,6 +24,7 @@ use crate::*;
 /// Before testing the mutants, the lab checks that the source tree passes its tests with no
 /// mutations applied.
 pub fn test_unmutated_then_all_mutants(
+    tool: &dyn Tool,
     source_tree: &Utf8Path,
     options: Options,
     console: &Console,
@@ -38,7 +39,7 @@ pub fn test_unmutated_then_all_mutants(
     console.set_debug_log(output_dir.open_debug_log()?);
 
     let rustflags = rustflags();
-    let mut mutants = discover_mutants(source_tree, &options)?;
+    let mut mutants = discover_mutants(tool, source_tree, &options)?;
     if options.shuffle {
         mutants.shuffle(&mut rand::thread_rng());
     }

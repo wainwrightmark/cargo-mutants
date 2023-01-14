@@ -22,22 +22,34 @@ use crate::path::TreeRelativePathBuf;
 use crate::source::SourceFile;
 use crate::*;
 
-pub fn discover_mutants(root: &Utf8Path, options: &Options) -> Result<Vec<Mutant>> {
-    walk_tree(root, options).map(|x| x.0)
+pub fn discover_mutants(
+    tool: &dyn Tool,
+    root: &Utf8Path,
+    options: &Options,
+) -> Result<Vec<Mutant>> {
+    walk_tree(tool, root, options).map(|x| x.0)
 }
 
-pub fn discover_files(root: &Utf8Path, options: &Options) -> Result<Vec<Arc<SourceFile>>> {
-    walk_tree(root, options).map(|x| x.1)
+pub fn discover_files(
+    tool: &dyn Tool,
+    root: &Utf8Path,
+    options: &Options,
+) -> Result<Vec<Arc<SourceFile>>> {
+    walk_tree(tool, root, options).map(|x| x.1)
 }
 
 /// Discover all mutants and all source files.
 ///
 /// The list of source files includes even those with no mutants.
-fn walk_tree(root: &Utf8Path, options: &Options) -> Result<(Vec<Mutant>, Vec<Arc<SourceFile>>)> {
+fn walk_tree(
+    tool: &dyn Tool,
+    root: &Utf8Path,
+    options: &Options,
+) -> Result<(Vec<Mutant>, Vec<Arc<SourceFile>>)> {
     let mut mutants = Vec::new();
     let mut seen_files: Vec<Arc<SourceFile>> = Vec::new();
 
-    let mut file_queue: VecDeque<Arc<SourceFile>> = cargo::cargo_root_files(root)?.into();
+    let mut file_queue: VecDeque<Arc<SourceFile>> = tool.root_files(root)?.into();
     while let Some(source_file) = file_queue.pop_front() {
         check_interrupted()?;
         let package_name = source_file.package_name.clone();

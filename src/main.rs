@@ -209,9 +209,9 @@ fn main() -> Result<()> {
     let options = Options::new(&args, &config)?;
     debug!(?options);
     if args.list_files {
-        list_files(&source_tree_root, &options, args.json)?;
+        list_files(&tool, &source_tree_root, &options, args.json)?;
     } else if args.list {
-        let mutants = discover_mutants(&source_tree_root, &options)?;
+        let mutants = discover_mutants(&tool, &source_tree_root, &options)?;
         if args.json {
             if args.diff {
                 eprintln!("--list --diff --json is not (yet) supported");
@@ -223,14 +223,14 @@ fn main() -> Result<()> {
         }
     } else {
         let lab_outcome =
-            lab::test_unmutated_then_all_mutants(&source_tree_root, options, &console)?;
+            lab::test_unmutated_then_all_mutants(&tool, &source_tree_root, options, &console)?;
         exit(lab_outcome.exit_code());
     }
     Ok(())
 }
 
-fn list_files(source: &Utf8Path, options: &Options, json: bool) -> Result<()> {
-    let files = discover_files(source, options)?;
+fn list_files(tool: &dyn Tool, source: &Utf8Path, options: &Options, json: bool) -> Result<()> {
+    let files = discover_files(tool, source, options)?;
     let mut out = io::BufWriter::new(io::stdout());
     if json {
         let json_list = Value::Array(

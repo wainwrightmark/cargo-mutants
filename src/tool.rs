@@ -7,10 +7,12 @@
 //! support for example Bazel in future.
 
 use std::fmt;
+use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::Result;
+use crate::SourceFile;
 
 pub trait Tool: fmt::Debug {
     /// Find the root of the package enclosing a given path.
@@ -18,4 +20,10 @@ pub trait Tool: fmt::Debug {
     /// The root is the enclosing directory that needs to be copied to make a self-contained
     /// scratch directory, and from where source discovery begins.
     fn find_root(&self, path: &Utf8Path) -> Result<Utf8PathBuf>;
+
+    /// Find all the root files from whence source discovery should begin.
+    ///
+    /// For Cargo, this is files like `src/bin/*.rs`, `src/lib.rs` identified by targets
+    /// in the manifest.
+    fn root_files(&self, path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>>;
 }
