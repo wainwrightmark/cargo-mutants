@@ -27,6 +27,12 @@ const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[derive(Debug)]
 pub struct CargoTool {}
 
+impl CargoTool {
+    pub fn new() -> CargoTool {
+        CargoTool {}
+    }
+}
+
 impl Tool for CargoTool {
     fn find_root(&self, path: &Utf8Path) -> Result<Utf8PathBuf> {
         let cargo_toml_path = locate_cargo_toml(path)?;
@@ -305,12 +311,12 @@ mod test {
 
     #[test]
     fn error_opening_outside_of_crate() {
-        CargoTool {}.find_root(Utf8Path::new("/")).unwrap_err();
+        CargoTool::new().find_root(Utf8Path::new("/")).unwrap_err();
     }
 
     #[test]
     fn open_subdirectory_of_crate_opens_the_crate() {
-        let root = CargoTool {}
+        let root = CargoTool::new()
             .find_root(Utf8Path::new("testdata/tree/factorial/src"))
             .expect("open source tree from subdirectory");
         assert!(root.is_dir());

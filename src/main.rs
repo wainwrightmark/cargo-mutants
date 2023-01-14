@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2023 Martin Pool
 
 //! `cargo-mutants`: Find inadequately-tested code that can be removed without any tests failing.
 
@@ -202,7 +202,7 @@ fn main() -> Result<()> {
     } else {
         Utf8Path::new(".")
     };
-    let tool = CargoTool {};
+    let tool = CargoTool::new();
     let source_tree_root = tool.find_root(source_path)?;
     let config = config::Config::read_tree_config(&source_tree_root)?;
     debug!(?config);

@@ -138,7 +138,7 @@ mod test {
 
     #[test]
     fn build_dir_debug_form() {
-        let root = CargoTool {}
+        let root = CargoTool::new()
             .find_root("testdata/tree/factorial".into())
             .unwrap();
         let build_dir = BuildDir::new(&root, &Console::new()).unwrap();
