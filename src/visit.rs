@@ -3,6 +3,10 @@
 //! Visit the abstract syntax tree and discover things to mutate.
 //!
 //! Knowledge of the `syn` API is localized here.
+//!
+//! Walking the tree starts with some root files known to the build tool:
+//! e.g. for cargo they are identified from the targets. The tree walker then
+//! follows `mod` statements to recursively visit other referenced files.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
