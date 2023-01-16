@@ -9,15 +9,18 @@
 use std::fmt::Debug;
 use std::marker::{Send, Sync};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use tracing::{debug, debug_span, trace};
 
 use crate::build_dir::BuildDir;
 use crate::console::Console;
+use crate::interrupt::check_interrupted;
 use crate::log_file::LogFile;
 use crate::options::Options;
 use crate::outcome::{Phase, PhaseResult};
+use crate::process::Process;
 use crate::scenario::Scenario;
 use crate::Result;
 use crate::SourceFile;
@@ -45,5 +48,28 @@ pub trait Tool: Debug + Send + Sync {
         timeout: Duration,
         console: &Console,
         options: &Options,
-    ) -> Result<PhaseResult>;
+    ) -> Result<PhaseResult> {
+        let _span = debug_span!("run", ?phase).entered();
+        let start = Instant::now();
+        let (argv, envp) = self.compose_argv_envp(build_dir, scenario, phase, options)?;
+        let process_status =
+            Process::run(&argv, &envp, build_dir.path(), timeout, log_file, console)?;
+        check_interrupted()?;
+        debug!(?process_status, elapsed = ?start.elapsed());
+        Ok(PhaseResult {
+            phase,
+            duration: start.elapsed(),
+            process_status,
+            argv,
+        })
+    }
+
+    /// Compose argv and envp to run one phase in this tool.
+    fn compose_argv_envp(
+        &self,
+        build_dir: &mut BuildDir,
+        scenario: &Scenario,
+        phase: Phase,
+        options: &Options,
+    ) -> Result<(Vec<String>, Vec<(String, String)>)>;
 }

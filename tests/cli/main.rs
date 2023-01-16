@@ -1011,7 +1011,7 @@ fn source_tree_typecheck_fails() {
         .stdout(contains("*** baseline"))
         .stdout(contains("build --tests")) // Caught at the check phase
         .stdout(contains("lib.rs:6"))
-        .stdout(contains("*** cargo result: "))
+        .stdout(contains("*** result: "))
         .stdout(contains(
             "build failed in an unmutated tree, so no mutants were tested",
         ));

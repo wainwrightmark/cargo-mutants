@@ -4,8 +4,6 @@
 
 use std::env;
 use std::sync::Arc;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
 
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Context, Result};
@@ -14,16 +12,10 @@ use serde_json::Value;
 #[allow(unused_imports)]
 use tracing::{debug, error, info, span, trace, warn, Level};
 
-use crate::console::Console;
-use crate::log_file::LogFile;
-use crate::outcome::PhaseResult;
 use crate::path::TreeRelativePathBuf;
-use crate::process::{get_command_output, Process};
+use crate::process::get_command_output;
 use crate::tool::Tool;
 use crate::*;
-
-/// How frequently to check if cargo finished.
-const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug)]
 pub struct CargoTool {}
@@ -71,55 +63,22 @@ impl Tool for CargoTool {
         Ok(r)
     }
 
-    fn run(
+    fn compose_argv_envp(
         &self,
-        build_dir: &mut BuildDir,
+        _build_dir: &mut BuildDir,
         scenario: &Scenario,
         phase: Phase,
-        log_file: &mut LogFile,
-        timeout: Duration,
-        console: &Console,
         options: &Options,
-    ) -> Result<PhaseResult> {
+    ) -> Result<(Vec<String>, Vec<(String, String)>)> {
         let argv = cargo_argv(scenario.package_name(), phase, options);
-        let start = Instant::now();
-
-        // The tests might use Insta <https://insta.rs>, and we don't want it to write
-        // updates to the source tree, and we *certainly* don't want it to write
-        // updates and then let the test pass.
-
-        let rustflags = rustflags();
-        let env = [
-            ("CARGO_ENCODED_RUSTFLAGS", rustflags.as_str()),
-            ("INSTA_UPDATE", "no"),
+        let envp = vec![
+            ("CARGO_ENCODED_RUSTFLAGS".to_owned(), rustflags()),
+            // The tests might use Insta <https://insta.rs>, and we don't want it to write
+            // updates to the source tree, and we *certainly* don't want it to write
+            // updates and then let the test pass.
+            ("INSTA_UPDATE".to_owned(), "no".to_owned()),
         ];
-        debug!(?env);
-
-        let mut child = Process::start(&argv, &env, build_dir.path(), timeout, log_file)?;
-
-        let process_status = loop {
-            if let Some(exit_status) = child.poll()? {
-                break exit_status;
-            } else {
-                console.tick();
-                sleep(WAIT_POLL_INTERVAL);
-            }
-        };
-
-        let message = format!(
-            "cargo result: {:?} in {:.3}s",
-            process_status,
-            start.elapsed().as_secs_f64()
-        );
-        log_file.message(&message);
-        debug!(cargo_result = ?process_status, elapsed = ?start.elapsed());
-        check_interrupted()?;
-        Ok(PhaseResult {
-            phase,
-            duration: start.elapsed(),
-            process_status,
-            argv,
-        })
+        Ok((argv, envp))
     }
 }
 
@@ -133,7 +92,7 @@ fn cargo_bin() -> String {
 
 /// Make up the argv for a cargo check/build/test invocation, including argv[0] as the
 /// cargo binary itself.
-pub fn cargo_argv(package_name: Option<&str>, phase: Phase, options: &Options) -> Vec<String> {
+fn cargo_argv(package_name: Option<&str>, phase: Phase, options: &Options) -> Vec<String> {
     let mut cargo_args = vec![cargo_bin(), phase.name().to_string()];
     if phase == Phase::Check || phase == Phase::Build {
         cargo_args.push("--tests".to_string());
@@ -157,7 +116,7 @@ pub fn cargo_argv(package_name: Option<&str>, phase: Phase, options: &Options) -
 ///
 /// See <https://doc.rust-lang.org/cargo/reference/environment-variables.html>
 /// <https://doc.rust-lang.org/rustc/lints/levels.html#capping-lints>
-pub fn rustflags() -> String {
+fn rustflags() -> String {
     let mut rustflags: Vec<String> = if let Some(rustflags) = env::var_os("CARGO_ENCODED_RUSTFLAGS")
     {
         rustflags
@@ -181,7 +140,7 @@ pub fn rustflags() -> String {
         Vec::new()
     };
     rustflags.push("--cap-lints=allow".to_owned());
-    debug!("adjusted rustflags: {:?}", rustflags);
+    // debug!("adjusted rustflags: {:?}", rustflags);
     rustflags.join("\x1f")
 }
 
