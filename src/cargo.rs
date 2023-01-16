@@ -18,11 +18,16 @@ use crate::tool::Tool;
 use crate::*;
 
 #[derive(Debug)]
-pub struct CargoTool {}
+pub struct CargoTool {
+    /// Encoded rustflags for the environment: common across all invocations.
+    encoded_rustflags: String,
+}
 
 impl CargoTool {
     pub fn new() -> CargoTool {
-        CargoTool {}
+        CargoTool {
+            encoded_rustflags: rustflags(),
+        }
     }
 }
 
@@ -72,7 +77,10 @@ impl Tool for CargoTool {
     ) -> Result<(Vec<String>, Vec<(String, String)>)> {
         let argv = cargo_argv(scenario.package_name(), phase, options);
         let envp = vec![
-            ("CARGO_ENCODED_RUSTFLAGS".to_owned(), rustflags()),
+            (
+                "CARGO_ENCODED_RUSTFLAGS".to_owned(),
+                self.encoded_rustflags.clone(),
+            ),
             // The tests might use Insta <https://insta.rs>, and we don't want it to write
             // updates to the source tree, and we *certainly* don't want it to write
             // updates and then let the test pass.

@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use camino::{Utf8Path, Utf8PathBuf};
+#[allow(unused_imports)]
 use tracing::{debug, debug_span, trace};
 
 use crate::build_dir::BuildDir;
