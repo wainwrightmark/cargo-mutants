@@ -13,8 +13,9 @@ use rand::prelude::*;
 use tracing::{debug, debug_span, error, info, trace};
 
 use crate::console::Console;
-use crate::outcome::{LabOutcome, Phase, ScenarioOutcome};
+use crate::outcome::{LabOutcome, Phase, PhaseResult, ScenarioOutcome};
 use crate::output::OutputDir;
+use crate::process::Process;
 use crate::visit::discover_mutants;
 use crate::*;
 
@@ -29,11 +30,10 @@ pub fn test_unmutated_then_all_mutants(
     console: &Console,
 ) -> Result<LabOutcome> {
     let start_time = Instant::now();
-    let output_in_dir = if let Some(o) = &options.output_in_dir {
-        o.as_path()
-    } else {
-        source_tree.clone()
-    };
+    let output_in_dir: &Utf8Path = options
+        .output_in_dir
+        .as_ref()
+        .map_or(source_tree, |p| p.as_path());
     let output_dir = OutputDir::new(output_in_dir)?;
     console.set_debug_log(output_dir.open_debug_log()?);
 
@@ -176,23 +176,34 @@ fn test_scenario(
         &[Phase::Build, Phase::Test]
     };
     for &phase in phases {
+        let _span = debug_span!("run", ?phase).entered();
+        let start = Instant::now();
         console.scenario_phase_started(scenario, phase);
         let timeout = match phase {
             Phase::Test => test_timeout,
             _ => Duration::MAX,
         };
-        let phase_result = tool.run(
-            build_dir,
-            scenario,
-            phase,
-            &mut log_file,
+        let argv = tool.compose_argv(scenario, phase, options)?;
+        let env = tool.compose_env(scenario, phase, options)?;
+        let process_status = Process::run(
+            &argv,
+            &env,
+            build_dir.path(),
             timeout,
+            &mut log_file,
             console,
-            options,
         )?;
-        outcome.add_phase_result(phase_result.clone());
+        check_interrupted()?;
+        debug!(?process_status, elapsed = ?start.elapsed());
+        let phase_result = PhaseResult {
+            phase,
+            duration: start.elapsed(),
+            process_status,
+            argv,
+        };
+        outcome.add_phase_result(phase_result);
         console.scenario_phase_finished(scenario, phase);
-        if (phase == Phase::Check && options.check_only) || !phase_result.process_status.success() {
+        if (phase == Phase::Check && options.check_only) || !process_status.success() {
             break;
         }
     }

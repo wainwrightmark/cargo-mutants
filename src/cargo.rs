@@ -19,15 +19,20 @@ use crate::*;
 
 #[derive(Debug)]
 pub struct CargoTool {
-    /// Encoded rustflags for the environment: common across all invocations.
-    encoded_rustflags: String,
+    // environment is currently constant across all invocations.
+    env: Vec<(String, String)>,
 }
 
 impl CargoTool {
     pub fn new() -> CargoTool {
-        CargoTool {
-            encoded_rustflags: rustflags(),
-        }
+        let env = vec![
+            ("CARGO_ENCODED_RUSTFLAGS".to_owned(), rustflags()),
+            // The tests might use Insta <https://insta.rs>, and we don't want it to write
+            // updates to the source tree, and we *certainly* don't want it to write
+            // updates and then let the test pass.
+            ("INSTA_UPDATE".to_owned(), "no".to_owned()),
+        ];
+        CargoTool { env }
     }
 }
 
@@ -68,25 +73,22 @@ impl Tool for CargoTool {
         Ok(r)
     }
 
-    fn compose_argv_envp(
+    fn compose_argv(
         &self,
-        _build_dir: &mut BuildDir,
         scenario: &Scenario,
         phase: Phase,
         options: &Options,
-    ) -> Result<(Vec<String>, Vec<(String, String)>)> {
-        let argv = cargo_argv(scenario.package_name(), phase, options);
-        let envp = vec![
-            (
-                "CARGO_ENCODED_RUSTFLAGS".to_owned(),
-                self.encoded_rustflags.clone(),
-            ),
-            // The tests might use Insta <https://insta.rs>, and we don't want it to write
-            // updates to the source tree, and we *certainly* don't want it to write
-            // updates and then let the test pass.
-            ("INSTA_UPDATE".to_owned(), "no".to_owned()),
-        ];
-        Ok((argv, envp))
+    ) -> Result<Vec<String>> {
+        Ok(cargo_argv(scenario.package_name(), phase, options))
+    }
+
+    fn compose_env(
+        &self,
+        _scenario: &Scenario,
+        _phase: Phase,
+        _options: &Options,
+    ) -> Result<Vec<(String, String)>> {
+        Ok(self.env.clone())
     }
 }
 

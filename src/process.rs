@@ -48,7 +48,7 @@ impl Process {
         log_file: &mut LogFile,
         console: &Console,
     ) -> Result<ProcessStatus> {
-        let mut child = Process::start(&argv, &env, cwd, timeout, log_file)?;
+        let mut child = Process::start(argv, env, cwd, timeout, log_file)?;
         let process_status = loop {
             if let Some(exit_status) = child.poll()? {
                 break exit_status;
