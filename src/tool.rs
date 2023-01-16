@@ -6,15 +6,23 @@
 //! At present only Cargo is supported, but this interface aims to leave a place to
 //! support for example Bazel in future.
 
-use std::fmt;
+use std::fmt::Debug;
+use std::marker::{Send, Sync};
 use std::sync::Arc;
+use std::time::Duration;
 
 use camino::{Utf8Path, Utf8PathBuf};
 
+use crate::build_dir::BuildDir;
+use crate::console::Console;
+use crate::log_file::LogFile;
+use crate::options::Options;
+use crate::outcome::{Phase, PhaseResult};
+use crate::scenario::Scenario;
 use crate::Result;
 use crate::SourceFile;
 
-pub trait Tool: fmt::Debug {
+pub trait Tool: Debug + Send + Sync {
     /// Find the root of the package enclosing a given path.
     ///
     /// The root is the enclosing directory that needs to be copied to make a self-contained
@@ -26,4 +34,16 @@ pub trait Tool: fmt::Debug {
     /// For Cargo, this is files like `src/bin/*.rs`, `src/lib.rs` identified by targets
     /// in the manifest.
     fn root_files(&self, path: &Utf8Path) -> Result<Vec<Arc<SourceFile>>>;
+
+    /// Run the tool for one phase.
+    fn run(
+        &self,
+        build_dir: &mut BuildDir,
+        scenario: &Scenario,
+        phase: Phase,
+        log_file: &mut LogFile,
+        timeout: Duration,
+        console: &Console,
+        options: &Options,
+    ) -> Result<PhaseResult>;
 }

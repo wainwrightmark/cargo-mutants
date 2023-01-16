@@ -12,7 +12,6 @@ use rand::prelude::*;
 #[allow(unused)]
 use tracing::{debug, debug_span, error, info, trace};
 
-use crate::cargo::{cargo_argv, run_cargo, rustflags};
 use crate::console::Console;
 use crate::outcome::{LabOutcome, Phase, ScenarioOutcome};
 use crate::output::OutputDir;
@@ -38,7 +37,6 @@ pub fn test_unmutated_then_all_mutants(
     let output_dir = OutputDir::new(output_in_dir)?;
     console.set_debug_log(output_dir.open_debug_log()?);
 
-    let rustflags = rustflags();
     let mut mutants = discover_mutants(tool, source_tree, &options)?;
     if options.shuffle {
         mutants.shuffle(&mut rand::thread_rng());
@@ -54,13 +52,13 @@ pub fn test_unmutated_then_all_mutants(
     let baseline_outcome = {
         let _span = debug_span!("baseline").entered();
         test_scenario(
+            tool,
             &mut build_dirs[0],
             &output_mutex,
             &options,
             &Scenario::Baseline,
             options.test_timeout.unwrap_or(Duration::MAX),
             console,
-            &rustflags,
         )?
     };
     if !baseline_outcome.success() {
@@ -119,13 +117,13 @@ pub fn test_unmutated_then_all_mutants(
                         debug!(location = %mutant.describe_location(), change = ?mutant.describe_change());
                         // We don't care about the outcome; it's been collected into the output_dir.
                         let _outcome = test_scenario(
+                            tool,
                             &mut build_dir,
                             &output_mutex,
                             &options,
                             &Scenario::Mutant(mutant),
                             mutated_test_timeout,
                             console,
-                            &rustflags,
                         )
                         .expect("scenario test");
                     } else {
@@ -152,13 +150,13 @@ pub fn test_unmutated_then_all_mutants(
 /// The [BuildDir] is passed as mutable because it's for the exclusive use of this function for the
 /// duration of the test.
 fn test_scenario(
+    tool: &dyn Tool,
     build_dir: &mut BuildDir,
     output_mutex: &Mutex<OutputDir>,
     options: &Options,
     scenario: &Scenario,
     test_timeout: Duration,
     console: &Console,
-    rustflags: &str,
 ) -> Result<ScenarioOutcome> {
     let mut log_file = output_mutex
         .lock()
@@ -178,24 +176,23 @@ fn test_scenario(
         &[Phase::Build, Phase::Test]
     };
     for &phase in phases {
-        let phase_start = Instant::now();
         console.scenario_phase_started(scenario, phase);
-        let cargo_argv = cargo_argv(scenario.package_name(), phase, options);
         let timeout = match phase {
             Phase::Test => test_timeout,
             _ => Duration::MAX,
         };
-        let cargo_result = run_cargo(
+        let phase_result = tool.run(
             build_dir,
-            &cargo_argv,
+            scenario,
+            phase,
             &mut log_file,
             timeout,
             console,
-            rustflags,
+            options,
         )?;
-        outcome.add_phase_result(phase, phase_start.elapsed(), cargo_result, &cargo_argv);
+        outcome.add_phase_result(phase_result.clone());
         console.scenario_phase_finished(scenario, phase);
-        if (phase == Phase::Check && options.check_only) || !cargo_result.success() {
+        if (phase == Phase::Check && options.check_only) || !phase_result.process_status.success() {
             break;
         }
     }

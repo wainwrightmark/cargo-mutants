@@ -16,8 +16,9 @@ use tracing::{debug, error, info, span, trace, warn, Level};
 
 use crate::console::Console;
 use crate::log_file::LogFile;
+use crate::outcome::PhaseResult;
 use crate::path::TreeRelativePathBuf;
-use crate::process::{get_command_output, Process, ProcessStatus};
+use crate::process::{get_command_output, Process};
 use crate::tool::Tool;
 use crate::*;
 
@@ -69,49 +70,57 @@ impl Tool for CargoTool {
         }
         Ok(r)
     }
-}
 
-/// Run one `cargo` subprocess, with a timeout, and with appropriate handling of interrupts.
-pub fn run_cargo(
-    build_dir: &BuildDir,
-    argv: &[String],
-    log_file: &mut LogFile,
-    timeout: Duration,
-    console: &Console,
-    rustflags: &str,
-) -> Result<ProcessStatus> {
-    let start = Instant::now();
+    fn run(
+        &self,
+        build_dir: &mut BuildDir,
+        scenario: &Scenario,
+        phase: Phase,
+        log_file: &mut LogFile,
+        timeout: Duration,
+        console: &Console,
+        options: &Options,
+    ) -> Result<PhaseResult> {
+        let argv = cargo_argv(scenario.package_name(), phase, options);
+        let start = Instant::now();
 
-    // The tests might use Insta <https://insta.rs>, and we don't want it to write
-    // updates to the source tree, and we *certainly* don't want it to write
-    // updates and then let the test pass.
+        // The tests might use Insta <https://insta.rs>, and we don't want it to write
+        // updates to the source tree, and we *certainly* don't want it to write
+        // updates and then let the test pass.
 
-    let env = [
-        ("CARGO_ENCODED_RUSTFLAGS", rustflags),
-        ("INSTA_UPDATE", "no"),
-    ];
-    debug!(?env);
+        let rustflags = rustflags();
+        let env = [
+            ("CARGO_ENCODED_RUSTFLAGS", rustflags.as_str()),
+            ("INSTA_UPDATE", "no"),
+        ];
+        debug!(?env);
 
-    let mut child = Process::start(argv, &env, build_dir.path(), timeout, log_file)?;
+        let mut child = Process::start(&argv, &env, build_dir.path(), timeout, log_file)?;
 
-    let process_status = loop {
-        if let Some(exit_status) = child.poll()? {
-            break exit_status;
-        } else {
-            console.tick();
-            sleep(WAIT_POLL_INTERVAL);
-        }
-    };
+        let process_status = loop {
+            if let Some(exit_status) = child.poll()? {
+                break exit_status;
+            } else {
+                console.tick();
+                sleep(WAIT_POLL_INTERVAL);
+            }
+        };
 
-    let message = format!(
-        "cargo result: {:?} in {:.3}s",
-        process_status,
-        start.elapsed().as_secs_f64()
-    );
-    log_file.message(&message);
-    debug!(cargo_result = ?process_status, elapsed = ?start.elapsed());
-    check_interrupted()?;
-    Ok(process_status)
+        let message = format!(
+            "cargo result: {:?} in {:.3}s",
+            process_status,
+            start.elapsed().as_secs_f64()
+        );
+        log_file.message(&message);
+        debug!(cargo_result = ?process_status, elapsed = ?start.elapsed());
+        check_interrupted()?;
+        Ok(PhaseResult {
+            phase,
+            duration: start.elapsed(),
+            process_status,
+            argv,
+        })
+    }
 }
 
 /// Return the name of the cargo binary.

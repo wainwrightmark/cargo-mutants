@@ -1,4 +1,4 @@
-// Copyright 2021, 2022 Martin Pool
+// Copyright 2021-2023 Martin Pool
 
 //! Manage a subprocess, with polling, timeouts, termination, and so on.
 //!
