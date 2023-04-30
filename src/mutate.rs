@@ -21,6 +21,13 @@ use crate::textedit::{replace_region, Span};
 /// A comment marker inserted next to changes, so they can be easily found.
 const MUTATION_MARKER_COMMENT: &str = "/* ~ changed by cargo-mutants ~ */";
 
+/// Various broad categories of mutants.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum Genre {
+    /// Replace the body of a function with a fixed value.
+    FnValue,
+}
+
 /// A mutation applied to source code.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Mutant {
@@ -38,6 +45,9 @@ pub struct Mutant {
 
     /// The replacement text.
     pub replacement: Cow<'static, str>,
+
+    /// What general category of mutant this is.
+    pub genre: Genre,
 }
 
 impl Mutant {
@@ -146,11 +156,12 @@ impl Mutant {
 
 impl fmt::Debug for Mutant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Custom implementation to show spans more concisely
         f.debug_struct("Mutant")
             .field("function_name", &self.function_name())
             .field("return_type", &self.return_type)
             .field("replacement", &self.replacement)
-            // more concise display of spans
+            .field("genre", &self.genre)
             .field("start", &(self.span.start.line, self.span.start.column))
             .field("end", &(self.span.end.line, self.span.end.column))
             .field("package_name", &self.package_name())
@@ -211,15 +222,38 @@ mod test {
         assert_eq!(mutants.len(), 2);
         assert_eq!(
             format!("{:?}", mutants[0]),
-            r#"Mutant { function_name: "main", return_type: "", replacement: "()", start: (1, 11), end: (5, 2), package_name: "cargo-mutants-testdata-factorial" }"#
+            "Mutant { \
+                function_name: \"main\", \
+                return_type: \"\", \
+                replacement: \"()\", \
+                genre: FnValue, \
+                start: (1, 11), end: (5, 2), \
+                package_name: \"cargo-mutants-testdata-factorial\" \
+            }"
         );
         assert_eq!(
             mutants[0].to_string(),
             "src/bin/factorial.rs:1: replace main with ()"
         );
         assert_eq!(
-            format!("{:?}", mutants[1]),
-            r#"Mutant { function_name: "factorial", return_type: "-> u32", replacement: "Default::default()", start: (7, 29), end: (13, 2), package_name: "cargo-mutants-testdata-factorial" }"#
+            format!("{:#?}", mutants[1]),
+            indoc! { r#"
+                Mutant {
+                    function_name: "factorial",
+                    return_type: "-> u32",
+                    replacement: "Default::default()",
+                    genre: FnValue,
+                    start: (
+                        7,
+                        29,
+                    ),
+                    end: (
+                        13,
+                        2,
+                    ),
+                    package_name: "cargo-mutants-testdata-factorial",
+                }"#
+            }
         );
         assert_eq!(
             mutants[1].to_string(),
